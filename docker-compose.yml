@@ -1,0 +1,100 @@
+x-model-config: &model-config
+  MODEL_NAME: paraphrase-MiniLM-L3-v2
+  EMBEDDING_DIMENSION: "384"
+
+services:
+  redis:
+    image: redis/redis-stack:latest
+    ports:
+      - "21042:8001"  # RedisInsight web UI.
+    volumes:
+      - redis_data:/data
+    environment:
+      # TODO: Provide a redis configuration.
+      - REDIS_ARGS=--save 60 1000
+    healthcheck:
+      # Check that Redis is reachable and finished loading data into memory.
+      test: ["CMD", "sh", "-c", "redis-cli ping | grep PONG && redis-cli info | grep loading:0"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  vectorizer:
+    build:
+      context: .
+      dockerfile: services/vectorizer/Dockerfile
+      args:
+        MODEL_NAME: ${MODEL_NAME:-paraphrase-MiniLM-L3-v2}
+    environment:
+      <<: *model-config
+      PORT: "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  importer-vsd-fr:
+    build:
+      context: .
+      dockerfile: services/importer/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      vectorizer:
+        condition: service_healthy
+    environment:
+      <<: *model-config
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      TARGET_URL: https://www.vsd.fr
+      POLL_INTERVAL: 1m
+      VECTORIZER_ADDR: http://vectorizer:8080
+      IMPORT_MAX_GOROUTINES: 3
+  
+  importer-public-fr:
+    build:
+      context: .
+      dockerfile: services/importer/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      vectorizer:
+        condition: service_healthy
+    environment:
+      <<: *model-config
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      TARGET_URL: https://www.public.fr
+      POLL_INTERVAL: 1m
+      VECTORIZER_ADDR: http://vectorizer:8080
+      IMPORT_MAX_GOROUTINES: 3
+
+  retrieval:
+    build:
+      context: .
+      dockerfile: services/retrieval/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      vectorizer:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *model-config
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      SERVER_PORT: "8080"
+      VECTORIZER_ADDR: http://vectorizer:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  redis_data:
