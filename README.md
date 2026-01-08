@@ -67,12 +67,14 @@ on the resources (CPU mainly) available.
 
 ## Architecture
 
-Different microservices composes the search engine:
+![Architecture](arch.png)
+
+Different microservices compose the search engine:
 
 ### Vectorizer service(s)
 
-The vectorizer service only role is to take texts as input and generate embeddings from it. A small API is exposed through FastAPI (Python)
-to receive batch of strings for transformation.
+The vectorizer service only role is to take texts as input and generate embeddings from it.
+A small API is exposed through FastAPI (Python) to receive batch of strings for transformation.
 
 ```json
 POST /embed
@@ -86,15 +88,15 @@ The EMBEDDING_DIMENSION must also be set to match the dimension of the vectors g
 #### Alternatives considered
 
 **Use a model better suited for french**:
-Other models are more suited for french, or multilanguages. However, the default one is very fast and use very few memory, which is a good fit for a local developpment.
+Other models are more suited for french, or multilanguages. However, the default one is very fast and uses very few memory, which is a good fit for a local setup.
 
 **Enable multiple workers in FastAPI**:
-By default FastAPI only have a single worker, and each request is handled sequentially. Enabling multiple workers, and loading the model in memory for each, would increase resources usage but could enable more throughput.
+By default FastAPI only has a single worker, and each request is handled sequentially. Enabling multiple workers, and loading the model in memory for each, would increase resources usage but could enable more throughput.
 Ultimately, the resources are already maxed out for a single machine (of reasonable size). In a real world scenario, it is better to scale-out the vectorizers and load balance the vectorization requests between the different vectorizer to make usage of multiple machines.
 
 **Replace Python with Rust**:
 *TODO*: Rust is also often used to load and use models. I could test to use Rust in order to have a more efficient handling of concurrent requests and resources.
-Python probably require more memory and time to start the service. However, Python is good to quickly bootstrap such service.
+Python probably requires more memory and time to start the service. However, Python is good to quickly bootstrap such service.
 In order to finalize the project in a few hours, I went for python without testing my assumptions.
 
 ### Redis instance
@@ -126,12 +128,18 @@ POST /search
 
 Received queries are forwarded to vectorizers to generates an embedding. This is then used by the retrieval service
 to perform a KNN search on the Redis instance, and returns each article title with an url, and its computed score.
+The score is a number from 0 to 1, lower means higher similarity.
 
 ### Importer service(s)
 
 The importer service is responsible to fetch the articles from a website. Each service is dedicated to its website.
-The service starts with an initial import, where is fetch all the articles of the website, vectorize it, and store it on Redis.
-After the initial import, the service regularly pull the newest articles from the websites:
+The service starts with an initial import process:
+
+- fetch all the articles of the website
+- vectorize articles in batch
+- store articles on Redis
+
+After the initial import, the service regularly pulls the newest articles from the websites:
 This ensures the data in Redis is kept up to date.
 
 To pull articles from the website, the importer call the Wordpress REST Api to list articles, page by page, with a 100 articles per page.
@@ -149,14 +157,13 @@ it is not usable for initial imports.
 
 **Post processing of the data**:
 *TODO*: The data is not always correctly formated, and relevance could be improved by processing the data before vectorization.
-Did not have the time to do it.
 
 **Vectorize the content of articles**:
 The importer are only vectorizing article descriptions. Better relevance could be achieved by vectorizing the whole article instead.
 However, the size of an article could reach the max context length of the model, which would have required "chunking" to go around.
 Obviously, I did not have the time to implement such workaround for this project.
 
-**Intermadiate articles cache**:
+**Intermediate articles cache**:
 It could make sense to pull the article data and write it in a file locally, as an intermediate cache and avoid performing calls on
 the website in case the initial import is restarted.
 As, in the context of this project, the importer services are not expected to be restarted in loop, I didn't find it necessary to
@@ -255,4 +262,3 @@ These variables must be consistent across all services:
 
 - In Docker Compose, service addresses use internal DNS (e.g., `redis:6379`, `vectorizer:8080`)
 - For local development, use `localhost` addresses.
-- `REDIS_ADDR`, `VECTORIZER_ADDR`, and `TARGET_URL` are required and have no defaults.
