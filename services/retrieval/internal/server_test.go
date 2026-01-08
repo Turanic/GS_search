@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/turanic/gs_search/pkg/store"
 )
@@ -181,26 +182,26 @@ func TestHandleSearch(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			server.handleSearch(w, req)
-			require.Equal(t, tc.expectedStatus, w.Code, "Expected status code %d, got %d", tc.expectedStatus, w.Code)
+			assert.Equal(t, tc.expectedStatus, w.Code, "Expected status code %d, got %d", tc.expectedStatus, w.Code)
 			if tc.expectedStatus == http.StatusOK {
 				var response SearchResponse
 				err := json.NewDecoder(w.Body).Decode(&response)
 				require.NoError(t, err, "Failed to decode response")
 
-				require.Equal(t, tc.expectedCount, response.Count, "Expected count %d, got %d", tc.expectedCount, response.Count)
-				require.Equal(t, len(tc.expectedResults), len(response.Results), "Expected %d results, got %d", len(tc.expectedResults), len(response.Results))
+				assert.Equal(t, tc.expectedCount, response.Count, "Expected count %d, got %d", tc.expectedCount, response.Count)
+				assert.Equal(t, len(tc.expectedResults), len(response.Results), "Expected %d results, got %d", len(tc.expectedResults), len(response.Results))
 
 				for i, expectedResult := range tc.expectedResults {
-					require.Equal(t, expectedResult.Title, response.Results[i].Title, "Result %d title mismatch", i)
-					require.Equal(t, expectedResult.URL, response.Results[i].URL, "Result %d URL mismatch", i)
-					require.Equal(t, expectedResult.Score, response.Results[i].Score, "Result %d score mismatch", i)
+					assert.Equal(t, expectedResult.Title, response.Results[i].Title, "Result %d title mismatch", i)
+					assert.Equal(t, expectedResult.URL, response.Results[i].URL, "Result %d URL mismatch", i)
+					assert.Equal(t, expectedResult.Score, response.Results[i].Score, "Result %d score mismatch", i)
 				}
-				require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 			}
 
 			if tc.expectErrorMessage != "" {
 				bodyStr := w.Body.String()
-				require.Contains(t, bodyStr, tc.expectErrorMessage, "Expected error message to contain '%s'", tc.expectErrorMessage)
+				assert.Contains(t, bodyStr, tc.expectErrorMessage, "Expected error message to contain '%s'", tc.expectErrorMessage)
 			}
 		})
 	}
